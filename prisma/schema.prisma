@@ -1,0 +1,420 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+model User {
+  id                String            @id @default(uuid())
+  email             String            @unique
+  passwordHash      String?
+  provider          String            @default("local")
+  providerId        String?
+  role              Role              @default(PARTICIPANT)
+  status            AccountStatus     @default(ACTIVE)
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  auditLogs         AuditLog[]        @relation("AuditActor")
+  comments          Comment[]
+  waitlists         EventWaitlist[]
+  organizedEvents   Event[]           @relation("OrganizerEvents")
+  favorites         Favorite[]
+  notifications     Notification[]
+  passwordResets    PasswordReset[]
+  posts             Post[]
+  profile           Profile?
+  registrations     Registration[]
+  reports           Report[]
+  transactions      Transaction[]
+  sentMessages      Message[]
+  participantConversations Conversation[] @relation("ParticipantConversations")
+  organizerConversations   Conversation[] @relation("OrganizerConversations")
+  postLikes         PostLike[]
+
+  // Relations for Wallet and Payouts
+  wallet             Wallet?           
+  payoutAccount      PayoutAccount?    
+  withdrawalRequests WithdrawalRequest[] 
+
+  @@unique([provider, providerId])
+  @@map("users")
+}
+
+model Profile {
+  userId      String    @id @map("user_id")
+  displayName String    @map("display_name")
+  avatarUrl   String?   @map("avatar_url")
+  city        String?
+  bio         String?
+  interests   Json?
+  dateOfBirth DateTime? @map("date_of_birth")
+  gender      String?
+  address     String?
+  phone       String?
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
+}
+
+model Event {
+  id              String          @id @default(uuid())
+  organizerId     String          @map("organizer_id")
+  title           String
+  slug            String?         @unique
+  description     String
+  locationText    String          @map("location_text")
+  lat             Float?
+  lng             Float?
+  startAt         DateTime        @map("start_at")
+  endAt           DateTime        @map("end_at")
+  price           Float?
+  capacity        Int             @default(0)
+  status          EventStatus     @default(DRAFT)
+  favoritesCount  Int             @default(0) @map("favorites_count")
+  registeredCount Int             @default(0) @map("registered_count")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  imageUrl        String?         @map("image_url")
+  tags            EventTag[]
+  waitlists       EventWaitlist[]
+  organizer       User            @relation("OrganizerEvents", fields: [organizerId], references: [id])
+  favorites       Favorite[]
+  registrations   Registration[]
+  reports         Report[]        @relation("ReportedEvent")
+  conversations   Conversation[]
+
+  @@map("events")
+}
+
+
+model Tag {
+  id     String     @id @default(uuid())
+  name   String     @unique
+  events EventTag[]
+
+  @@map("tags")
+}
+
+model ForumTag {
+  id   String  @id @default(uuid())
+  name String  @unique
+  posts PostForumTag[]
+
+  @@map("forum_tags")
+}
+
+model PostForumTag {
+  postId String @map("post_id")
+  tagId  String @map("tag_id")
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag    ForumTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+  @@map("post_forum_tags")
+}
+
+model EventTag {
+  eventId String @map("event_id")
+  tagId   String @map("tag_id")
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  tag     Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, tagId])
+  @@map("event_tags")
+}
+
+model Registration {
+  id            String             @id @default(uuid())
+  eventId       String             @map("event_id")
+  userId        String             @map("user_id")
+  status        RegistrationStatus @default(REGISTERED)
+  createdAt     DateTime           @default(now()) @map("created_at")
+  phone         String?
+  transactionId String?            @unique @map("transaction_id")
+
+  event     Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transaction   Transaction?       @relation(fields: [transactionId], references: [id])
+
+
+  @@unique([eventId, userId])
+  @@map("registrations")
+}
+
+model Favorite {
+  userId    String   @map("user_id")
+  eventId   String   @map("event_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, eventId])
+  @@map("favorites")
+}
+
+
+model Post {
+  id        String           @id @default(uuid())
+  authorId  String           @map("author_id")
+  title     String
+  content   String
+  status    VisibilityStatus @default(VISIBLE)
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+  likesCount Int             @default(0) @map("likes_count")
+  comments  Comment[]
+  forumTags PostForumTag[]
+  author    User             @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  reports   Report[]         @relation("ReportedPost")
+  likes     PostLike[]
+
+  @@map("posts")
+}
+
+model PostLike {
+  userId    String   @map("user_id")
+  postId    String   @map("post_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, postId])
+  @@map("post_likes")
+}
+
+
+// Xóa PostTag vì đã tách tag cho forum
+
+model Comment {
+  id        String           @id @default(uuid())
+  postId    String           @map("post_id")
+  authorId  String           @map("author_id")
+  content   String
+  status    VisibilityStatus @default(VISIBLE)
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+  author    User             @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  post      Post             @relation(fields: [postId], references: [id], onDelete: Cascade)
+  reports   Report[]         @relation("ReportedComment")
+
+  @@map("comments")
+}
+
+model Report {
+  id              String       @id @default(uuid())
+  reporterId      String       @map("reporter_id")
+  targetEventId   String?      @map("target_event_id")
+  targetPostId    String?      @map("target_post_id")
+  targetCommentId String?      @map("target_comment_id")
+  reason          String
+  status          ReportStatus @default(OPEN)
+  note            String?
+  createdAt       DateTime     @default(now()) @map("created_at")
+  reporter        User         @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  targetComment   Comment?     @relation("ReportedComment", fields: [targetCommentId], references: [id], onDelete: Cascade)
+  targetEvent     Event?       @relation("ReportedEvent", fields: [targetEventId], references: [id], onDelete: Cascade)
+  targetPost      Post?        @relation("ReportedPost", fields: [targetPostId], references: [id], onDelete: Cascade)
+
+  @@map("reports")
+}
+
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  type      String
+  payload   Json
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?  @map("actor_id")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id")
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+  actor      User?    @relation("AuditActor", fields: [actorId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model EventWaitlist {
+  id        String   @id @default(uuid())
+  eventId   String   @map("event_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@map("event_waitlist")
+}
+
+model Transaction {
+  id           String            @id @default(uuid())
+  userId       String            @map("user_id")
+  amount       Float
+  description  String
+  status       TransactionStatus @default(PENDING)
+  orderCode    String            @unique @map("order_code")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  registration Registration?
+
+  @@map("transactions")
+}
+
+model PasswordReset {
+  id           String    @id @default(uuid())
+  userId       String    @map("user_id")
+  tokenHash    String?   @unique @map("token_hash")
+  expiresAt    DateTime? @map("expires_at")
+  otpHash      String?   @map("otp_hash")
+  otpExpiresAt DateTime? @map("otp_expires_at")
+  verifiedAt   DateTime? @map("verified_at")
+  usedAt       DateTime? @map("used_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_resets")
+}
+
+model Conversation {
+  id            String    @id @default(uuid())
+  eventId       String
+  participantId String
+  organizerId   String
+  messages      Message[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  event       Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  participant User  @relation("ParticipantConversations", fields: [participantId], references: [id])
+  organizer   User  @relation("OrganizerConversations", fields: [organizerId], references: [id])
+
+  @@unique([eventId, participantId, organizerId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  senderId       String
+  content        String
+  createdAt      DateTime     @default(now())
+  isRead         Boolean      @default(false)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation(fields: [senderId], references: [id])
+
+  @@map("messages")
+}
+
+model Wallet {
+  id        String   @id @default(uuid())
+  userId    String   @unique @map("user_id")
+  balance   Float    @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("wallets")
+}
+
+model PayoutAccount {
+  id                 String              @id @default(uuid())
+  userId             String              @unique @map("user_id")
+  bankName           String              @map("bank_name")
+  accountName        String              @map("account_name")
+  accountNumber      String              @map("account_number")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  withdrawalRequests WithdrawalRequest[] // Add this missing relation
+
+  @@map("payout_accounts")
+}
+
+model WithdrawalRequest {
+  id              String           @id @default(uuid())
+  organizerId     String           @map("organizer_id")
+  requestedAmount Float?           @map("requested_amount") // The original 100% amount requested
+  amount          Float            // The final amount after commission (e.g., 85%)
+  status          WithdrawalStatus @default(PENDING)
+  payoutAccountId String           @map("payout_account_id")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  processedAt     DateTime?        @map("processed_at")
+  notes           String?
+
+  organizer     User          @relation(fields: [organizerId], references: [id])
+  payoutAccount PayoutAccount @relation(fields: [payoutAccountId], references: [id])
+
+  @@map("withdrawal_requests")
+}
+
+enum Role {
+  PARTICIPANT
+  ORGANIZER
+  ADMIN
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+  CANCELLED
+}
+
+enum RegistrationStatus {
+  REGISTERED
+  CANCELLED
+  DEPOSITED
+  PENDING
+}
+
+enum VisibilityStatus {
+  VISIBLE
+  HIDDEN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  BANNED
+}
+
+enum ReportStatus {
+  OPEN
+  RESOLVED
+  REJECTED
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum WithdrawalStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
