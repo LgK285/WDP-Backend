@@ -12,7 +12,7 @@ import { ConfigService } from '@nestjs/config';
 
 @WebSocketGateway({
   cors: {
-    origin: ['http://localhost:5173', 'https://freeday.onrender.com'],
+    origin: ['http://localhost:5173', 'https://wdp-frontend-9v5d.onrender.com'],
     credentials: true,
   },
   namespace: '/notifications',
