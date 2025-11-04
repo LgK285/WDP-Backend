@@ -60,7 +60,7 @@ export class AuthService {
     const token = this.jwtService.sign(payload);
 
     // Redirect to frontend with token
-    return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?token=${token}`);
+    return res.redirect(`${process.env.FRONTEND_URL || 'https://wdp-frontend-9v5d.onrender.com'}/login?token=${token}`);
   }
 
   async register(registerUserDto: RegisterUserDto) {
